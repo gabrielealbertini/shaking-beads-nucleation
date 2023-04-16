@@ -1,6 +1,9 @@
 #!/usr/Abin/env python
 
+from typing import List
+from matplotlib.collections import PatchCollection
 import numpy as np
+import matplotlib.pyplot as plt
 
 class Bead:
     def __init__(self,
@@ -8,6 +11,10 @@ class Bead:
                  position : np.ndarray,
                  velocity : np.ndarray,
                  angular_velocity: np.ndarray):
+        
+        """
+        Position and velocity in the dish frame (not the lab frame)
+        """
 
         self.radius = radius
         self.position = position
@@ -29,7 +36,8 @@ def find_neighbours(beads : list[Bead],
     for bead_id, bead in enumerate(beads):
         if bead_id == my_bead_id:
             continue
-        dist = np.linalg.norm(bead.position - my_bead.position)
+        # take only projection in xy plane
+        dist = np.linalg.norm(bead.position[:2] - my_bead.position[:2])
         if dist < thres_dist:
             neighbours_id.append(bead_id)
             
@@ -100,6 +108,103 @@ def compute_transfer_angular_momentuum(beads : list[Bead],
 
     return momentuum_perpendicular
 
+def plot_transfer_angular_momentum(beads: List[Bead], r: float, ref_bead: int=0, prefix: str="") -> None:
+    """
+        Plot in the same folder:
+            * the reference bead and the influence of its neighbors (nucleation)
+            * the angular momentum transfer for each bead, highlighting the largest one (momentuum)
+
+        Args:
+            beads: list of Bead of a frame
+            r: float, radius of the beads
+            ref_bead: int, index of the reference bead
+            prefix: str, prefix for the name of the files
+    """
+    # find beads within 10% of radius distance
+    beads_within = 2.1*r
+    neighbours_id = find_neighbours(beads, ref_bead, beads_within)
+
+    plt.figure()
+
+    for bead_id, bead in enumerate(beads):
+        if bead_id in neighbours_id:
+            clr = 'g'
+        elif bead_id==ref_bead:
+            clr = 'r'
+        else:
+            clr='k'
+        if 1:
+            ax = plt.gca()
+            circ = plt.Circle([bead.position[0],
+                            bead.position[1]],
+                            bead.radius)
+            
+            # Make sure the reference bead is on top
+            zorder = -10
+            if bead_id == ref_bead:
+                zorder = -9
+            
+            coll= PatchCollection([circ], zorder=zorder, color=clr)
+
+            ax.add_collection(coll)
+        else:
+            plt.scatter(bead.position[0],
+                        bead.position[1],
+                        s=100*bead.radius,color=clr)
+
+    
+    ax = plt.gca()
+    ax.add_patch(plt.Circle([beads[ref_bead].position[0],
+                             beads[ref_bead].position[1]],
+                            beads_within, color='g',alpha=0.6))
+    #ax.set_aspect('equal')
+    #plt.show()
+    #print('verify visually')
+
+    #############
+    # test compute tesnfer angular momentuum
+
+    momentuum_list = compute_transfer_angular_momentuum(beads, ref_bead, beads_within,test=True)
+
+    ax = plt.gca()
+    ax.set_aspect('equal')
+    # plt.legend()
+    plt.title(f"{prefix}nucleation")
+    plt.savefig(f'{prefix}{ref_bead}_nucleation.png')
+    
+    print('verify visually')
+
+    # loop over all particles and find the one with largest transfer of angular momentuum
+    
+    plt.figure()
+
+    momentuum = []
+    for ref_bead_loc,bead in enumerate(beads):
+        momentuum_list = compute_transfer_angular_momentuum(beads, ref_bead_loc, beads_within)
+        momentuum_amplitude = np.sum(momentuum_list)
+
+        momentuum.append(momentuum_amplitude)
+
+    plt.scatter([beads[i].position[0] for i in range(len(beads))],
+                [beads[i].position[1] for i in range(len(beads))],
+                c=momentuum)
+
+    idx_max = np.argmax(momentuum)
+
+    plt.scatter(beads[idx_max].position[0],
+                beads[idx_max].position[1],
+                c='r', s=5)
+    print(beads[idx_max].position[2])
+    
+    ax = plt.gca()
+    ax.set_aspect('equal')
+    
+    #plt.show()
+    # plt.legend()
+    plt.colorbar()
+    plt.title(f"{prefix}momentuum")
+    plt.savefig(f'{prefix}{ref_bead}_momentuum.png')
+
 if __name__ == "__main__":
 
     import matplotlib.pyplot as plt
@@ -145,72 +250,6 @@ if __name__ == "__main__":
 
         beads.append(Bead(r,pos,vel,ang_vel))
 
-    # find beads within 10% of radius distance
-
-    ref_bead = 0
-    beads_within = 2.1*r
-    neighbours_id = find_neighbours(beads, ref_bead, beads_within)
-
-    for bead_id, bead in enumerate(beads):
-        if bead_id in neighbours_id:
-            clr = 'g'
-        elif bead_id==ref_bead:
-            clr = 'r'
-        else:
-            clr='k'
-        if 0:
-            ax = plt.gca()
-            ax.add_patch(plt.Circle([bead.position[0],
-                                     bead.position[1]],
-                                    bead.radius,color=clr))
-        else:
-            plt.scatter(bead.position[0],
-                        bead.position[1],
-                        s=100*bead.radius,color=clr)
-
-    
-    ax = plt.gca()
-    ax.add_patch(plt.Circle([beads[ref_bead].position[0],
-                             beads[ref_bead].position[1]],
-                            beads_within, color='g',alpha=0.2))
-    #ax.set_aspect('equal')
-    #plt.show()
-    #print('verify visually')
-
-    #############
-    # test compute tesnfer angular momentuum
-
-    momentuum_list = compute_transfer_angular_momentuum(beads, ref_bead, beads_within,test=True)
-
-    ax = plt.gca()
-    ax.set_aspect('equal')
-    print('verify visually')
-    
-
-    # loop over all particles and find the one with largest transfer of angular momentuum
-    
-    plt.figure()
-
-    momentuum = []
-    for ref_bead,bead in enumerate(beads):
-        momentuum_list = compute_transfer_angular_momentuum(beads, ref_bead, beads_within)
-        momentuum_amplitude = np.sum(momentuum_list)
-
-        momentuum.append(momentuum_amplitude)
-
-    plt.scatter([beads[i].position[0] for i in range(len(beads))],
-                [beads[i].position[1] for i in range(len(beads))],
-                c=momentuum)
-
-    idx_max = np.argmax(momentuum)
-
-    plt.scatter(beads[idx_max].position[0],
-                beads[idx_max].position[1],
-                c='r', s=5)
-    
-    ax = plt.gca()
-    ax.set_aspect('equal')
-    
-    plt.show()
+    plot_transfer_angular_momentum(beads, r)
 
     
