@@ -84,7 +84,7 @@ def compute_transfer_angular_momentuum(beads : list[Bead],
         # add z dimension
         perpendicular = list(perpendicular)+[0]
         # compute angular velocity in perpendicular component
-        mom_perp = np.dot(bead.angular_velocity,
+        mom_perp = np.dot(bead.angular_velocity-ref_bead.angular_velocity,
                           perpendicular)
 
         momentuum_perpendicular.append(mom_perp)
