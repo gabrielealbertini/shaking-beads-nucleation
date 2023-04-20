@@ -4,6 +4,7 @@ from typing import List
 from matplotlib.collections import PatchCollection
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 class Bead:
     def __init__(self,
@@ -108,7 +109,7 @@ def compute_transfer_angular_momentuum(beads : list[Bead],
 
     return momentuum_perpendicular
 
-def plot_transfer_angular_momentum(beads: List[Bead], r: float, ref_bead: int=0, prefix: str="") -> None:
+def plot_transfer_angular_momentum(beads: List[Bead], r: float, ref_bead: int=0, folder: str="", prefix: str="") -> None:
     """
         Plot in the same folder:
             * the reference bead and the influence of its neighbors (nucleation)
@@ -118,12 +119,14 @@ def plot_transfer_angular_momentum(beads: List[Bead], r: float, ref_bead: int=0,
             beads: list of Bead of a frame
             r: float, radius of the beads
             ref_bead: int, index of the reference bead
+            folder: str, folder where to save the plots
             prefix: str, prefix for the name of the files
     """
     # find beads within 10% of radius distance
     beads_within = 2.1*r
     neighbours_id = find_neighbours(beads, ref_bead, beads_within)
 
+    plt.close()
     plt.figure()
 
     for bead_id, bead in enumerate(beads):
@@ -166,30 +169,37 @@ def plot_transfer_angular_momentum(beads: List[Bead], r: float, ref_bead: int=0,
 
     momentuum_list = compute_transfer_angular_momentuum(beads, ref_bead, beads_within,test=True)
 
-    ax = plt.gca()
-    ax.set_aspect('equal')
-    # plt.legend()
-    plt.title(f"{prefix}nucleation")
-    plt.savefig(f'{prefix}{ref_bead}_nucleation.png')
-    
-    print('verify visually')
-
     # loop over all particles and find the one with largest transfer of angular momentuum
-    
-    plt.figure()
-
     momentuum = []
     for ref_bead_loc,bead in enumerate(beads):
         momentuum_list = compute_transfer_angular_momentuum(beads, ref_bead_loc, beads_within)
         momentuum_amplitude = np.sum(momentuum_list)
 
         momentuum.append(momentuum_amplitude)
+    idx_max = np.argmax(momentuum)
+    
+    plt.scatter(beads[idx_max].position[0],
+                beads[idx_max].position[1],
+                marker='x',
+                c='r', s=15, label='bead with max momentuum')
+
+    ax = plt.gca()
+    ax.set_aspect('equal')
+    # plt.legend()
+    plt.title(f"{prefix}nucleation\nGreen circle: neighbors, Red circle: nucleating bead z={beads[ref_bead].position[2]:.2f}")
+    plt.legend()
+    if folder != "":
+        os.makedirs(folder, exist_ok=True)
+    plt.savefig(f'{folder}/{prefix}{ref_bead}_{idx_max}_nucleation.png')
+    
+    print('verify visually')
+   
+    plt.close()
+    plt.figure()   
 
     plt.scatter([beads[i].position[0] for i in range(len(beads))],
                 [beads[i].position[1] for i in range(len(beads))],
                 c=momentuum)
-
-    idx_max = np.argmax(momentuum)
 
     plt.scatter(beads[idx_max].position[0],
                 beads[idx_max].position[1],
@@ -203,7 +213,9 @@ def plot_transfer_angular_momentum(beads: List[Bead], r: float, ref_bead: int=0,
     # plt.legend()
     plt.colorbar()
     plt.title(f"{prefix}momentuum")
-    plt.savefig(f'{prefix}{ref_bead}_momentuum.png')
+    plt.savefig(f'{folder}/{prefix}{ref_bead}_{idx_max}_momentuum.png')
+
+    plt.close()
 
 if __name__ == "__main__":
 

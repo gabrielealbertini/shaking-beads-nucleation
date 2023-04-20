@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import read_binary
 from compute_transfer_momentuum import Bead, plot_transfer_angular_momentum
+import imageio
+import glob
 
 class Simulation:
     """
@@ -135,22 +137,40 @@ class Simulation:
         first_frame_nuc = idx[0][0]
         first_bead_nuc = idx[1][0]
 
+        frame_window = 10
+        folder = f"{self.n}_{self.v}_{self.it}"
+        for frame_number in range(first_frame_nuc - frame_window, first_frame_nuc + frame_window):
         # convert data of this first frame of nucleation to bead objects
-        beads = []
-        r = 0.5 # distances normalized by bead diameter in the simulations
-        for i in range(self.n):
-            beads.append(Bead(r, self.data_beads[first_frame_nuc, 1, i, :],
-                                 self.data_beads[first_frame_nuc, 2, i, :],
-                                 self.data_beads[first_frame_nuc, 3, i, :]))
-            
-        prefix = f"{self.n}_{self.v}_{self.it}_"
-        plot_transfer_angular_momentum(beads, r, first_bead_nuc, prefix)
+            beads = []
+            r = 0.5 # distances normalized by bead diameter in the simulations
+            for i in range(self.n):
+                beads.append(Bead(r, self.data_beads[frame_number, 1, i, :],
+                                    self.data_beads[frame_number, 2, i, :],
+                                    self.data_beads[frame_number, 3, i, :]))
+                
+            prefix = f"{frame_number}_"
+            plot_transfer_angular_momentum(beads, r, first_bead_nuc, folder, prefix)
+
+        frame_array = glob.glob(f"{folder}/*nucleation.png")
+        frame_array.sort()
+        print(frame_array)
+        self.make_gif(folder, frame_array)
+
+    def make_gif(self, folder, frame_array):
+        frames = []
+        for frame in frame_array:
+            image = imageio.v2.imread(frame)
+            frames.append(image)
+        imageio.mimsave(f'{folder}/{folder}.gif', # output gif
+                frames,          # array of input frames
+                fps = 1) 
+        
     
 if __name__ == "__main__":
     base_folder = "/n/holyscratch01/shared/adjellouli/simulations_reorganized/mechanisms/nucleation_mechanism_1000fps/d_amp=1.600"
 
     for it in range(3):
-        for v in [205, 240]:
+        for v in [205, 240]:#[205, 240]:
             sim = Simulation(base_folder, 107, v, it)
 
             # to read data from cluster and save it locally
