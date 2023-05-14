@@ -5,12 +5,49 @@
     then plot the angular momentum transfer for each simulation
 """
 
+import os
 from pathlib import Path
+import time
+from matplotlib import pyplot as plt
 import numpy as np
 import read_binary
-from compute_transfer_momentuum import Bead, plot_transfer_angular_momentum
+from compute_transfer_momentuum import Bead, compute_transfer_angular_momentuum, compute_transfer_angular_momentuum_numba, plot_transfer_angular_momentum
 import imageio
 import glob
+import numba
+
+
+# fast math does not increase performance
+@numba.njit(fastmath=True, parallel=False)
+def _compute_ang_momentum(data_beads, n, first_frame_nuc, cr):
+    r = 0.5
+    frame_window_before = 6000
+    frame_window_after = 2000#3000
+    beads_within = cr*r
+
+    step = 1
+    frames = [] 
+    agm = np.zeros(((data_beads.shape[0] - 500)//step, n))
+    zpos = np.zeros(((data_beads.shape[0] - 500)//step, n))
+    for i, frame_number in enumerate(range(0, data_beads.shape[0] - 500, step)):
+    # agm = np.zeros(((frame_window_after + frame_window_before)//step, n))
+    # zpos = np.zeros(((frame_window_after + frame_window_before)//step, n))
+    #for i, frame_number in enumerate(range(first_frame_nuc - frame_window_before, first_frame_nuc + frame_window_after, step)):
+        # beads = []
+        frames.append(frame_number)
+        # for j in range(self.n):
+        #     beads.append(Bead(r, self.data_beads[frame_number, 1, j, :],
+        #                         self.data_beads[frame_number, 2, j, :],
+        #                 self.data_beads[frame_number, 3, j, :]))  
+        
+        # compute angular momentum
+        for ref_bead in range(n):
+            momentuum_list = compute_transfer_angular_momentuum_numba(data_beads[frame_number, :, :, :], ref_bead, beads_within)
+            # print(momentuum_list)
+            agm[i, ref_bead] = np.sum(np.array(momentuum_list))
+            zpos[i, ref_bead] = data_beads[frame_number, 1, ref_bead, 2] #beads[ref_bead].position[2]
+
+    return frames, agm, zpos
 
 class Simulation:
     """
@@ -132,7 +169,7 @@ class Simulation:
         """
         # find frame where there is nucleation
         # threshold is quite low to make sure to get the moment when the bead is not fully up
-        idx = np.where(self.data_beads[:, 1, :, 2] > (0.5 + np.sin(np.pi/3)/2))
+        idx = np.where(self.data_beads[:, 1, :, 2] > (0.5 + np.sin(np.pi/3)))#/2))
         print(idx)
         first_frame_nuc = idx[0][0]
         first_bead_nuc = idx[1][0]
@@ -165,21 +202,102 @@ class Simulation:
                 frames,          # array of input frames
                 fps = 1) 
         
+
+   
+
+
+    # @numba.jit(nopython=False)
+    def plot_angular_momentum_over_time(self):
+        """
+            Plot angular momentum over time for each bead
+        """
+        cr = 2.
+        idx = np.where(self.data_beads[:, 1, :, 2] > (0.5 + np.sin(np.pi/3)))#/2))
+        print(idx)
+        first_frame_nuc = idx[0][0]
+        first_bead_nuc = idx[1][0]
+
+        print(len(self.data_beads))
+        # exit()
+        
+        file = f"{self.n}_{self.v}_{self.it}_agm.npz"
+        if os.path.isfile(file):
+            data = np.load(file)
+            frames = data['frames']
+            agm = data['agm']
+            zpos = data['zpos']
+            print("Loaded agm data")
+        else:
+            time_start = time.perf_counter()
+            frames, agm, zpos = _compute_ang_momentum(self.data_beads, self.n, first_frame_nuc, cr)
+            time_end = time.perf_counter()
+            np.savez(file, frames=frames, agm=agm, zpos=zpos)
+            print("Saved agm data")
+            print(f"Time elapsed: {time_end - time_start:0.4f} seconds")
+
+        # idx_2 = np.argsort(zpos[-1, :])[::-1][:10]
+        idx_2 = []
+        for idx_b in idx[1]:
+            if idx_b != first_bead_nuc and idx_b not in idx_2:
+                idx_2.append(idx_b) 
+            if len(idx_2) == 10:
+                break
+        print(idx_2)
+
+        plt.figure()
+        fig, axs = plt.subplots(2, 1, figsize=(45, 15))
+        for j in range(self.n):
+            args = {"color": "gray", "zorder": 0}
+            if j == first_bead_nuc:
+                args = {"label": "First nucleating bead", "zorder": 10}
+            elif j in idx_2:
+                args = {"label": "Other bead of interest", "zorder": 10}
+            axs[0].plot(frames, agm[:, j], **args)
+            axs[1].plot(frames, zpos[:, j], **args)
+
+        axs[0].set_xlabel("Frame number")
+        axs[0].set_ylabel("Projected angular momentum (rad/tau)")
+        axs[1].set_xlabel("Frame number")
+        axs[1].set_ylabel("Z position (particle diameter)")
+        for ax in axs:
+            ax.axvline(first_frame_nuc, color="black", linestyle="--", label='nucleation')
+            ax.grid()
+            ax.legend()
+        
+        plt.suptitle(f"{self.n}_{self.v}_{self.it} 1000 fps simulation, contact radius = {cr}")
+
+        plt.tight_layout()
+
+        plt.savefig(f"{self.n}_{self.v}_{self.it}_angular_momentum_evolution.png")
+        plt.close()
+
+        # plot z position of nucleating bead too
     
+
+def job(base_folder, n, v, it):
+    sim = Simulation(base_folder, 107, v, it)
+
+    # to read data from cluster and save it locally
+    # sim.read_data_cluster()
+    # sim.save_data_locally()
+
+    # study momentum transfer
+    sim.load_local_data()
+    # sim.plot_transfer_momentuum()
+    sim.plot_angular_momentum_over_time()
+
 if __name__ == "__main__":
     base_folder = "/n/holyscratch01/shared/adjellouli/simulations_reorganized/mechanisms/nucleation_mechanism_1000fps/d_amp=1.600"
 
-    for it in range(3):
-        for v in [205, 240]:#[205, 240]:
-            sim = Simulation(base_folder, 107, v, it)
+    import multiprocessing as mp
+    with mp.get_context('spawn').Pool() as p:
+        res = []
+        for it in range(3):
+            for v in [205]:#[205, 240]:
+                res.append(p.apply_async(job, args=(base_folder, 107, v, it)))
 
-            # to read data from cluster and save it locally
-            # sim.read_data_cluster()
-            # sim.save_data_locally()
-
-            # study momentum transfer
-            sim.load_local_data()
-            sim.plot_transfer_momentuum()
+        [r.get() for r in res]
+           
 
     # to start interactive session on the cluster
-    # salloc -p test -t 1:00 --mem 32000 -c 4
+    # salloc -p test -t 0-08:00 --mem 32000 -c 4

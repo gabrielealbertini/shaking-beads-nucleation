@@ -22,7 +22,8 @@ class Bead:
         self.velocity = velocity
         self.angular_velocity = angular_velocity
 
-        
+import numba
+
 def find_neighbours(beads : list[Bead],
                     my_bead_id : int,
                     thres_dist : float) -> list:
@@ -39,6 +40,26 @@ def find_neighbours(beads : list[Bead],
             continue
         # take only projection in xy plane
         dist = np.linalg.norm(bead.position[:2] - my_bead.position[:2])
+        if dist < thres_dist:
+            neighbours_id.append(bead_id)
+            
+    return neighbours_id
+
+@numba.njit(fastmath=True)
+def find_neighbours_numba(beads : np.ndarray,
+                    my_bead_id : int,
+                    thres_dist : float) -> list[int]:
+    """
+    beads [list of bead]
+    my_bead_id [int]
+    thres_dist [float]
+    """
+    neighbours_id = []
+    for bead_id in range(beads.shape[0]):
+        if bead_id == my_bead_id:
+            continue
+        # take only projection in xy plane
+        dist = np.linalg.norm(beads[bead_id, :2] - beads[my_bead_id, :2])
         if dist < thres_dist:
             neighbours_id.append(bead_id)
             
@@ -106,6 +127,49 @@ def compute_transfer_angular_momentuum(beads : list[Bead],
             C.append(1)
     if test:
         plt.quiver(X,Y,U,V,C,cmap='tab10',clim=[0,10])
+
+    return momentuum_perpendicular
+
+
+@numba.njit(fastmath=True)
+def compute_transfer_angular_momentuum_numba(beads : np.ndarray,
+                                       my_bead_id : int,
+                                       thres_dist : float) -> list:
+    """
+    idea:
+    from rotation of beads in contact compute if this rotation provides vertical uplift
+    """
+    momentuum_perpendicular = []
+
+    # ref_bead = beads[my_bead_id]
+
+    neighbours_list = find_neighbours_numba(beads[1, :, :],
+                                      my_bead_id,
+                                      thres_dist)
+
+    for bead_id in neighbours_list:
+        bead = beads[bead_id]
+
+        # compute angular velocity perpendicualr to target bead direction (project onto xy plane)
+        # print(beads[1, bead_id, :])
+        direction = np.subtract(beads[1, bead_id, :], beads[1, my_bead_id, :])
+
+        # xy projection
+        direction = direction[0:2]
+
+        # direction in perpendicular direction
+        perpendicular = np.array([-direction[1],direction[0]])
+
+        # normalize
+        perpendicular = perpendicular/np.linalg.norm(perpendicular)
+
+        # add z dimension
+        perpendicular = list(perpendicular)+[0]
+        # compute angular velocity in perpendicular component
+        mom_perp = np.dot(beads[3, bead_id, :] - beads[3, my_bead_id, :],
+                          np.array(perpendicular))
+
+        momentuum_perpendicular.append(mom_perp)
 
     return momentuum_perpendicular
 
@@ -182,6 +246,9 @@ def plot_transfer_angular_momentum(beads: List[Bead], r: float, ref_bead: int=0,
                 beads[idx_max].position[1],
                 marker='x',
                 c='r', s=15, label='bead with max momentuum')
+    
+    for i, txt in enumerate(beads):
+        ax.annotate(f"{momentuum[i]*100:.2f}", (beads[i].position[0] - 0.4, beads[i].position[1] - 0.1), color='w', fontsize=6)
 
     ax = plt.gca()
     ax.set_aspect('equal')
