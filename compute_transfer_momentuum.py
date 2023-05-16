@@ -58,8 +58,7 @@ def find_neighbours_numba(beads : np.ndarray,
     for bead_id in range(beads.shape[0]):
         if bead_id == my_bead_id:
             continue
-        # take only projection in xy plane
-        dist = np.linalg.norm(beads[bead_id, :2] - beads[my_bead_id, :2])
+        dist = np.linalg.norm(beads[bead_id, :] - beads[my_bead_id, :])
         if dist < thres_dist:
             neighbours_id.append(bead_id)
             
@@ -127,6 +126,11 @@ def compute_transfer_angular_momentuum(beads : list[Bead],
             C.append(1)
     if test:
         plt.quiver(X,Y,U,V,C,cmap='tab10',clim=[0,10])
+
+    # if np.isclose(np.sum(momentuum_perpendicular), 0):
+    #     print("sum of momentuum perpendicular is zero")
+    #     print(neighbours_list)
+
 
     return momentuum_perpendicular
 

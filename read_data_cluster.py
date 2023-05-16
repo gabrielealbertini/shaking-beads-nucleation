@@ -32,7 +32,7 @@ def _compute_ang_momentum(data_beads, n, first_frame_nuc, cr):
     for i, frame_number in enumerate(range(0, data_beads.shape[0] - 500, step)):
     # agm = np.zeros(((frame_window_after + frame_window_before)//step, n))
     # zpos = np.zeros(((frame_window_after + frame_window_before)//step, n))
-    #for i, frame_number in enumerate(range(first_frame_nuc - frame_window_before, first_frame_nuc + frame_window_after, step)):
+    # for i, frame_number in enumerate(range(first_frame_nuc - frame_window_before, first_frame_nuc + frame_window_after, step)):
         # beads = []
         frames.append(frame_number)
         # for j in range(self.n):
@@ -43,6 +43,36 @@ def _compute_ang_momentum(data_beads, n, first_frame_nuc, cr):
         # compute angular momentum
         for ref_bead in range(n):
             momentuum_list = compute_transfer_angular_momentuum_numba(data_beads[frame_number, :, :, :], ref_bead, beads_within)
+            # print(momentuum_list)
+            agm[i, ref_bead] = np.sum(np.array(momentuum_list))
+            zpos[i, ref_bead] = data_beads[frame_number, 1, ref_bead, 2] #beads[ref_bead].position[2]
+
+    return frames, agm, zpos
+
+def compute_ang_momentum(data_beads, n, first_frame_nuc, cr):
+    r = 0.5
+    frame_window_before = 50
+    frame_window_after = 50#3000
+    beads_within = cr*r
+
+    step = 1
+    frames = [] 
+    # agm = np.zeros(((data_beads.shape[0] - 500)//step, n))
+    # zpos = np.zeros(((data_beads.shape[0] - 500)//step, n))
+    # for i, frame_number in enumerate(range(0, data_beads.shape[0] - 500, step)):
+    agm = np.zeros(((frame_window_after + frame_window_before)//step, n))
+    zpos = np.zeros(((frame_window_after + frame_window_before)//step, n))
+    for i, frame_number in enumerate(range(first_frame_nuc - frame_window_before, first_frame_nuc + frame_window_after, step)):
+        beads = []
+        frames.append(frame_number)
+        for j in range(n):
+            beads.append(Bead(r, data_beads[frame_number, 1, j, :],
+                                data_beads[frame_number, 2, j, :],
+                        data_beads[frame_number, 3, j, :]))  
+        
+        # compute angular momentum
+        for ref_bead in range(n):
+            momentuum_list = compute_transfer_angular_momentuum(beads, ref_bead, beads_within)
             # print(momentuum_list)
             agm[i, ref_bead] = np.sum(np.array(momentuum_list))
             zpos[i, ref_bead] = data_beads[frame_number, 1, ref_bead, 2] #beads[ref_bead].position[2]
@@ -220,8 +250,8 @@ class Simulation:
         print(len(self.data_beads))
         # exit()
         
-        file = f"{self.n}_{self.v}_{self.it}_agm.npz"
-        if os.path.isfile(file):
+        file = f"{self.n}_{self.v}_{self.it}_agm-2.npz"
+        if False and os.path.isfile(file):
             data = np.load(file)
             frames = data['frames']
             agm = data['agm']
@@ -244,21 +274,56 @@ class Simulation:
                 break
         print(idx_2)
 
+        # frames, agm, zpos = compute_ang_momentum(self.data_beads, self.n, first_frame_nuc, cr)
+
         plt.figure()
-        fig, axs = plt.subplots(2, 1, figsize=(45, 15))
+        fig, axs = plt.subplots(7, 1, figsize=(45, 45))
+
+        # compute rolling average for each bead with agm
+        # https://stackoverflow.com/questions/27427618/how-can-i-simply-calculate-the-rolling-moving-variance-of-a-time-series-in-pytho
+        rolling_avg_nb = 20
+        def moving_average(a, rolling_avg_nb=10) :
+            ret = np.cumsum(a, axis=0, dtype=float)
+            ret[rolling_avg_nb:, :] = ret[rolling_avg_nb:, :] - ret[:-rolling_avg_nb, :]
+            return ret[rolling_avg_nb - 1:, :] / rolling_avg_nb
+        rolling_avg = moving_average(agm, rolling_avg_nb=rolling_avg_nb)
+        Aw = np.lib.stride_tricks.sliding_window_view(agm, rolling_avg_nb, axis=0)
+        rolling_std = np.std(Aw, axis=-1)
+        # testa = np.array([[1, 2],[1, 2], [1,2], [1,3]])
+        # Aw = np.lib.stride_tricks.sliding_window_view(testa, 2, axis=0)
+        # print(np.std(Aw, axis=-1))
+        # exit()
+
+        ke_trans = np.sum(self.data_beads[:, 2, :, :]**2, axis=2)
+        ke_rot = np.sum(self.data_beads[:, 3, :, :]**2, axis=2)
+        d_center = np.sqrt(np.sum(self.data_beads[:, 1, :, :2]**2, axis=2))  # 2d
+
+
+        # slice_fr = slice(0, 100)
+        slice_fr = slice(0, len(frames))
         for j in range(self.n):
             args = {"color": "gray", "zorder": 0}
             if j == first_bead_nuc:
                 args = {"label": "First nucleating bead", "zorder": 10}
             elif j in idx_2:
                 args = {"label": "Other bead of interest", "zorder": 10}
-            axs[0].plot(frames, agm[:, j], **args)
-            axs[1].plot(frames, zpos[:, j], **args)
+
+            if j == 55:
+                axs[0].plot(frames[slice_fr], agm[slice_fr, j], **args)
+                axs[1].plot(frames[slice_fr], zpos[slice_fr, j], **args)
+                axs[2].plot(frames[rolling_avg_nb-1:], rolling_avg[:, j], **args)
+                axs[3].plot(frames[rolling_avg_nb-1:], rolling_std[:, j], **args)
+                axs[4].plot(frames, ke_trans[frames, j], **args)
+                axs[5].plot(frames, ke_rot[frames, j], **args)
+                axs[6].plot(frames, d_center[frames, j], **args)
+            # print(agm[slice_fr, j])
 
         axs[0].set_xlabel("Frame number")
         axs[0].set_ylabel("Projected angular momentum (rad/tau)")
         axs[1].set_xlabel("Frame number")
         axs[1].set_ylabel("Z position (particle diameter)")
+        axs[1].set_ylim(0.4, 2.)
+        axs[0].set_ylim(-1.5, 1.5)
         for ax in axs:
             ax.axvline(first_frame_nuc, color="black", linestyle="--", label='nucleation')
             ax.grid()
@@ -293,7 +358,7 @@ if __name__ == "__main__":
     with mp.get_context('spawn').Pool() as p:
         res = []
         for it in range(3):
-            for v in [205]:#[205, 240]:
+            for v in [205, 240]:#[205, 240]:
                 res.append(p.apply_async(job, args=(base_folder, 107, v, it)))
 
         [r.get() for r in res]
