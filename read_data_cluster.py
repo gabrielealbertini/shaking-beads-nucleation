@@ -251,7 +251,7 @@ class Simulation:
         # exit()
         
         file = f"{self.n}_{self.v}_{self.it}_agm-2.npz"
-        if False and os.path.isfile(file):
+        if os.path.isfile(file):
             data = np.load(file)
             frames = data['frames']
             agm = data['agm']
@@ -278,6 +278,7 @@ class Simulation:
 
         plt.figure()
         fig, axs = plt.subplots(7, 1, figsize=(45, 45))
+        slice_fr = slice(0, 1000)#len(frames))
 
         # compute rolling average for each bead with agm
         # https://stackoverflow.com/questions/27427618/how-can-i-simply-calculate-the-rolling-moving-variance-of-a-time-series-in-pytho
@@ -286,8 +287,8 @@ class Simulation:
             ret = np.cumsum(a, axis=0, dtype=float)
             ret[rolling_avg_nb:, :] = ret[rolling_avg_nb:, :] - ret[:-rolling_avg_nb, :]
             return ret[rolling_avg_nb - 1:, :] / rolling_avg_nb
-        rolling_avg = moving_average(agm, rolling_avg_nb=rolling_avg_nb)
-        Aw = np.lib.stride_tricks.sliding_window_view(agm, rolling_avg_nb, axis=0)
+        rolling_avg = moving_average(agm[slice_fr], rolling_avg_nb=rolling_avg_nb)
+        Aw = np.lib.stride_tricks.sliding_window_view(agm[slice_fr], rolling_avg_nb, axis=0)
         rolling_std = np.std(Aw, axis=-1)
         # testa = np.array([[1, 2],[1, 2], [1,2], [1,3]])
         # Aw = np.lib.stride_tricks.sliding_window_view(testa, 2, axis=0)
@@ -300,7 +301,6 @@ class Simulation:
 
 
         # slice_fr = slice(0, 100)
-        slice_fr = slice(0, len(frames))
         for j in range(self.n):
             args = {"color": "gray", "zorder": 0}
             if j == first_bead_nuc:
@@ -311,11 +311,11 @@ class Simulation:
             if j == 55:
                 axs[0].plot(frames[slice_fr], agm[slice_fr, j], **args)
                 axs[1].plot(frames[slice_fr], zpos[slice_fr, j], **args)
-                axs[2].plot(frames[rolling_avg_nb-1:], rolling_avg[:, j], **args)
-                axs[3].plot(frames[rolling_avg_nb-1:], rolling_std[:, j], **args)
-                axs[4].plot(frames, ke_trans[frames, j], **args)
-                axs[5].plot(frames, ke_rot[frames, j], **args)
-                axs[6].plot(frames, d_center[frames, j], **args)
+                axs[2].plot(frames[slice_fr][rolling_avg_nb-1:], rolling_avg[:, j], **args)
+                axs[3].plot(frames[slice_fr][rolling_avg_nb-1:], rolling_std[:, j], **args)
+                axs[4].plot(frames[slice_fr], ke_trans[frames[slice_fr], j], **args)
+                axs[5].plot(frames[slice_fr], ke_rot[frames[slice_fr], j], **args)
+                axs[6].plot(frames[slice_fr], d_center[frames[slice_fr], j], **args)
             # print(agm[slice_fr, j])
 
         axs[0].set_xlabel("Frame number")
@@ -324,16 +324,16 @@ class Simulation:
         axs[1].set_ylabel("Z position (particle diameter)")
         axs[1].set_ylim(0.4, 2.)
         axs[0].set_ylim(-1.5, 1.5)
-        for ax in axs:
-            ax.axvline(first_frame_nuc, color="black", linestyle="--", label='nucleation')
-            ax.grid()
-            ax.legend()
+        # for ax in axs:
+        #     ax.axvline(first_frame_nuc, color="black", linestyle="--", label='nucleation')
+        #     ax.grid()
+        #     ax.legend()
         
         plt.suptitle(f"{self.n}_{self.v}_{self.it} 1000 fps simulation, contact radius = {cr}")
 
         plt.tight_layout()
 
-        plt.savefig(f"{self.n}_{self.v}_{self.it}_angular_momentum_evolution.png")
+        plt.savefig(f"{self.n}_{self.v}_{self.it}_angular_momentum_evolution_slice.png")
         plt.close()
 
         # plot z position of nucleating bead too
