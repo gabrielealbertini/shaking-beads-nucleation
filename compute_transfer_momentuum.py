@@ -143,16 +143,20 @@ def compute_transfer_angular_momentuum_numba(beads : np.ndarray,
     idea:
     from rotation of beads in contact compute if this rotation provides vertical uplift
     """
-    momentuum_perpendicular = []
 
     # ref_bead = beads[my_bead_id]
+
+    # todo remove list and make it a numpy array with mask
 
     neighbours_list = find_neighbours_numba(beads[1, :, :],
                                       my_bead_id,
                                       thres_dist)
+    
+    momentuum_perpendicular = np.zeros(len(neighbours_list))
+    momentuum_parallel = np.zeros(len(neighbours_list))
 
-    for bead_id in neighbours_list:
-        bead = beads[bead_id]
+    for i, bead_id in enumerate(neighbours_list):
+        # bead = beads[bead_id]
 
         # compute angular velocity perpendicualr to target bead direction (project onto xy plane)
         # print(beads[1, bead_id, :])
@@ -173,9 +177,12 @@ def compute_transfer_angular_momentuum_numba(beads : np.ndarray,
         mom_perp = np.dot(beads[3, bead_id, :] - beads[3, my_bead_id, :],
                           np.array(perpendicular))
 
-        momentuum_perpendicular.append(mom_perp)
+        mom_parallel = beads[3, bead_id, 2] - beads[3, my_bead_id, 2]
 
-    return momentuum_perpendicular
+        momentuum_perpendicular[i] = mom_perp
+        momentuum_parallel[i] = mom_parallel
+
+    return momentuum_perpendicular, momentuum_parallel
 
 def plot_transfer_angular_momentum(beads: List[Bead], r: float, ref_bead: int=0, folder: str="", prefix: str="") -> None:
     """
