@@ -16,7 +16,7 @@ from compute_transfer_momentuum import Bead, compute_transfer_angular_momentuum,
 import imageio
 import glob
 import numba
-
+from scipy.signal import savgol_filter
 
 # fast math does not increase performance
 @numba.njit(fastmath=True, parallel=False)
@@ -45,10 +45,10 @@ def _compute_ang_momentum(data_beads, n, first_frame_nuc, cr):
         
         # compute angular momentum
         for ref_bead in range(n):
-            momentuum_list, momentuum_screw_list = compute_transfer_angular_momentuum_numba(data_beads[frame_number, :, :, :], ref_bead, beads_within)
+            momentuum_list, momentuum_spin_z = compute_transfer_angular_momentuum_numba(data_beads[frame_number, :, :, :], ref_bead, beads_within)
             # print(momentuum_list)
-            agm[i, ref_bead] = np.sum(momentuum_list)
-            ag_screw[i, ref_bead] = np.sum(momentuum_screw_list)
+            agm[i, ref_bead] = np.sum(momentuum_list) # - np.dot(ag_bead, perpendicular)
+            ag_screw[i, ref_bead] = np.sum(momentuum_spin_z)
             zpos[i, ref_bead] = data_beads[frame_number, 1, ref_bead, 2] #beads[ref_bead].position[2]
 
     return frames, agm, ag_screw, zpos
@@ -255,18 +255,18 @@ class Simulation:
         # exit()
         
         file = f"/n/holyscratch01/shared/fpollet/mechanism/PAM/{self.n}_{self.v}_{self.it}_agm-{cr}.npz"
-        if False and os.path.isfile(file):
+        if os.path.isfile(file):
             data = np.load(file)
             frames = data['frames']
             agm = data['agm']
             zpos = data['zpos']
-            # am_screw = data['am_screw']
+            neighboring_spin = data['am_screw']
             print("Loaded agm data")
         else:
             time_start = time.perf_counter()
-            frames, agm, am_screw, zpos = _compute_ang_momentum(self.data_beads, self.n, first_frame_nuc, cr)
+            frames, agm, neighboring_spin, zpos = _compute_ang_momentum(self.data_beads, self.n, first_frame_nuc, cr)
             time_end = time.perf_counter()
-            np.savez(file, frames=frames, agm=agm, am_screw=am_screw, zpos=zpos)
+            np.savez(file, frames=frames, agm=agm, am_screw=neighboring_spin, zpos=zpos)
             print("Saved agm data")
             print(f"Time elapsed: {time_end - time_start:0.4f} seconds")
 
@@ -282,9 +282,9 @@ class Simulation:
         # frames, agm, zpos = compute_ang_momentum(self.data_beads, self.n, first_frame_nuc, cr)
 
         plt.figure()
-        fig, axs = plt.subplots(8, 1, figsize=(45, 45), sharex=True)
+        fig, axs = plt.subplots(4, 1, figsize=(45, 45), sharex=True)
         slice_fr = slice(0, len(frames))
-        # slice_fr = slice(25000, 26500)
+        #slice_fr = slice(25000, 26500)
 
         # print(slice_fr)
         # print(agm.shape)
@@ -297,6 +297,7 @@ class Simulation:
             ret[rolling_avg_nb:, :] = ret[rolling_avg_nb:, :] - ret[:-rolling_avg_nb, :]
             return ret[rolling_avg_nb - 1:, :] / rolling_avg_nb
         rolling_avg = moving_average(agm[slice_fr], rolling_avg_nb=rolling_avg_nb)
+        savgol_signal = savgol_filter(agm[slice_fr], 21, 3, axis=0, mode='interp') 
         Aw = np.lib.stride_tricks.sliding_window_view(agm[slice_fr], rolling_avg_nb, axis=0)
         rolling_std = np.std(Aw, axis=-1)
         # testa = np.array([[1, 2],[1, 2], [1,2], [1,3]])
@@ -307,7 +308,7 @@ class Simulation:
         ke_trans = np.sum(self.data_beads[:, 2, :, :]**2, axis=2)
         ke_rot = np.sum(self.data_beads[:, 3, :, :]**2, axis=2)
         d_center = np.sqrt(np.sum(self.data_beads[:, 1, :, :2]**2, axis=2))  # 2d
-        screweffect = self.data_beads[:, 3, :, 2]
+        spin_z = self.data_beads[:, 3, :, 2]
 
 
         # slice_fr = slice(0, 100)
@@ -319,18 +320,21 @@ class Simulation:
                 args = {"label": "Other bead of interest", "zorder": 10}
 
             # if j == 69: # 89 interesting for it 1
-            axs[0].plot(frames[slice_fr], agm[slice_fr, j], **args)
-            axs[1].plot(frames[slice_fr], zpos[slice_fr, j], **args)
-            # axs[2].plot(frames[slice_fr][rolling_avg_nb-1:], rolling_avg[:, j], **args)
-            # axs[3].plot(frames[slice_fr][rolling_avg_nb-1:], rolling_std[:, j], **args)
-            axs[2].plot(frames[slice_fr][rolling_avg_nb//2-1:-rolling_avg_nb//2], rolling_avg[:, j], **args)
-            axs[3].plot(frames[slice_fr][rolling_avg_nb//2-1:-rolling_avg_nb//2], rolling_std[:, j], **args)
-            axs[4].plot(frames[slice_fr], ke_trans[frames[slice_fr], j], **args)
-            axs[5].plot(frames[slice_fr], ke_rot[frames[slice_fr], j], **args)
-            axs[6].plot(frames[slice_fr], d_center[frames[slice_fr], j], **args)
-            # axs[7].plot(frames[slice_fr], am_screw[slice_fr, j], **args)
-            axs[7].plot(frames[slice_fr], screweffect[frames[slice_fr], j], **args)
-            # print(agm[slice_fr, j])
+            if j == first_bead_nuc:
+                axs[0].plot(frames[slice_fr], agm[slice_fr, j], **args)
+                axs[1].plot(frames[slice_fr], zpos[slice_fr, j], **args)
+                # axs[2].plot(frames[slice_fr][rolling_avg_nb-1:], rolling_avg[:, j], **args)
+                # axs[3].plot(frames[slice_fr][rolling_avg_nb-1:], rolling_std[:, j], **args)
+                axs[2].plot(frames[slice_fr][rolling_avg_nb//2-1:-rolling_avg_nb//2], rolling_avg[:, j], **args)
+                # axs[3].plot(frames[slice_fr][rolling_avg_nb//2-1:-rolling_avg_nb//2], rolling_std[:, j], **args)
+                axs[3].plot(frames[slice_fr], savgol_signal[:, j], **args)
+                # axs[4].plot(frames[slice_fr], ke_trans[frames[slice_fr], j], **args)
+                # axs[5].plot(frames[slice_fr], ke_rot[frames[slice_fr], j], **args)
+                # axs[6].plot(frames[slice_fr], d_center[frames[slice_fr], j], **args)
+                # axs[7].plot(frames[slice_fr], screweffect[frames[slice_fr], j], **args)
+                # axs[7].plot(frames[slice_fr], spin_z[frames[slice_fr], j], **args)
+                # axs[8].plot(frames[slice_fr], neighboring_spin[slice_fr, j], **args)
+                # print(agm[slice_fr, j])
 
         axs[0].set_xlabel("Frame number")
         axs[0].set_ylabel("Projected angular momentum (rad/tau)")
@@ -374,23 +378,27 @@ class Simulation:
             frames = data['frames']
             agm = data['agm']
             zpos = data['zpos']
+            spin_z = data['am_screw']
+            # spin_z = self.data_beads[:, 3, :, 2]
             print("Loaded agm data")
-        rolling_avg_nb = 50
+        rolling_avg_nb = 20#50
         def moving_average(a, rolling_avg_nb=10) :
             ret = np.cumsum(a, axis=0, dtype=float)
             ret[rolling_avg_nb:, :] = ret[rolling_avg_nb:, :] - ret[:-rolling_avg_nb, :]
             return ret[rolling_avg_nb - 1:, :] / rolling_avg_nb
         slice_fr = slice(0, len(frames))
-        rolling_avg = moving_average(agm[slice_fr], rolling_avg_nb=rolling_avg_nb)
-
+        #rolling_avg = moving_average(agm[slice_fr], rolling_avg_nb=rolling_avg_nb)
+        rolling_avg = savgol_filter(agm[slice_fr], rolling_avg_nb + 1, 3, axis=0, mode='interp') 
 
         times = []
         amps = []
+        spins = []
         z_amps = []
         i_idx = []
 
         times_nuc = []
         amps_nuc = []
+        spins_nuc = []
 
         print(frames_nuc[0])
         print(beads_nuc[0])
@@ -402,8 +410,9 @@ class Simulation:
             # if i != 3:
             #     continue
             # print(i)
-            arr = rolling_avg[slice_fr, i][:frames_nuc[0] + margin]
-            zpos_short = zpos[slice_fr, i][rolling_avg_nb//2-1:-rolling_avg_nb//2][:frames_nuc[0] + margin]
+            arr = rolling_avg[slice_fr, i]#[:frames_nuc[0] + margin]
+            zpos_short = zpos[slice_fr, i][rolling_avg_nb//2-1:-rolling_avg_nb//2]#[:frames_nuc[0] + margin]
+            spin_z_short = spin_z[slice_fr, i][rolling_avg_nb//2-1:-rolling_avg_nb//2]#[:frames_nuc[0] + margin]
             assert zpos_short.shape == arr.shape
             # compute time between zeros of rolling_avg
             # zero_indices = np.where(np.isclose(arr, 0, atol=0.01))[0]
@@ -424,6 +433,7 @@ class Simulation:
             # Calculate the maximum value within each interval
             max_values = np.maximum.reduceat(arr, starting_indices)
             max_values_z = np.maximum.reduceat(zpos_short, starting_indices)
+            max_values_spin = np.maximum.reduceat(spin_z_short, starting_indices)
 
 
             # if i in beads_nuc:
@@ -439,9 +449,8 @@ class Simulation:
 
             zpos_startings = zpos_short[zero_indices] > threshold
 
-            z_chg_all = (zpos_startings[:-1] == False) & (zpos_startings[1:] == True)
-            z_chg_all = zpos_startings[:-1] != zpos_startings[1:]
-            z_chg_all = zpos_startings[:-1] == True # keep only the ones below threshold at the beginning of the interval
+            # z_chg_all = (zpos_startings[:-1] == False) & (zpos_startings[1:] == True)
+            # z_chg_all = zpos_startings[:-1] != zpos_startings[1:]
             # z_chg_all = zero_indices[:-1] > frames_nuc[0] # keep only before nucleation
             # print(np.where(z_chg_all))
 
@@ -449,9 +458,12 @@ class Simulation:
             # == false apres nucleation
 
             if i == beads_nuc[0]:
-                z_chg = (zero_indices[:-1] <= frames_nuc[0]) & (zero_indices[1:] > frames_nuc[0])
+                event_nucleation_mask = (zero_indices[:-1] <= frames_nuc[0]) & (zero_indices[1:] > frames_nuc[0])
             else:
-                z_chg = np.zeros(index_diff.shape, dtype=bool)
+                event_nucleation_mask = np.zeros(index_diff.shape, dtype=bool)
+
+            events_selected_mask = ((zpos_startings[:-1] == False) & (zero_indices[:-1] < frames_nuc[0])) | event_nucleation_mask # keep only the ones below threshold at the beginning of the interval
+
 
             
             # z_chg_all = zero_indices > z_chg
@@ -463,13 +475,16 @@ class Simulation:
             # why frame number so low? just indice of changes in rolling avg so much less than frames
             # why simulation so long???
 
-            times_nuc.extend(index_diff[z_chg])
-            amps_nuc.extend(max_values[z_chg])
+            times_nuc.extend(index_diff[event_nucleation_mask])
+            amps_nuc.extend(max_values[event_nucleation_mask])
+            spins_nuc.extend(max_values_spin[event_nucleation_mask])
 
-            times.extend(index_diff[~z_chg_all])
-            amps.extend(max_values[~z_chg_all])
-            z_amps.extend(max_values_z[~z_chg_all])
-            i_idx.extend([i]*len(max_values[~z_chg_all]))
+            times.extend(index_diff[events_selected_mask])
+            amps.extend(max_values[events_selected_mask])
+            z_amps.extend(max_values_z[events_selected_mask])
+            spins.extend(max_values_spin[events_selected_mask])
+            # spins.extend(spin_z_short[zero_indices][z_chg_all])
+            i_idx.extend([i]*len(max_values[events_selected_mask]))
 
 
             # zpos to cut to match rolling avg
@@ -480,7 +495,7 @@ class Simulation:
         order = np.argsort(z_amps)
         print(order.shape)
 
-        return self.it, times, amps, z_amps, i_idx, times_nuc, amps_nuc
+        return self.it, times, amps, z_amps, i_idx, times_nuc, amps_nuc, spins, spins_nuc
 
         plt.scatter(times[order], amps[order], label='Other beads', zorder=0, c=z_amps[order], cmap='viridis', s=10) # plot( 'o', color='blue',  alpha=0.05,
         # annotate with bead number
@@ -570,8 +585,12 @@ def assemble_plot(res):
     i_idx = []
     times_nuc = []
     amps_nuc = []
+    spins = []
+    spins_nuc = []
 
-    for it, times1, amps1, z_amps1, i_idx1, times_nuc1, amps_nuc1 in res:
+    pam_lim = 10#0.05
+
+    for it, times1, amps1, z_amps1, i_idx1, times_nuc1, amps_nuc1, spins1, spins_nuc1 in res:
         print("Assemblying plot for", it)
 
         its.append(it)
@@ -581,18 +600,40 @@ def assemble_plot(res):
         i_idx.extend(i_idx1)
         times_nuc.extend(times_nuc1)
         amps_nuc.extend(amps_nuc1)
+        spins.extend(spins1)
+        spins_nuc.extend(spins_nuc1)
 
     times = np.array(times)
     amps = np.array(amps)
     z_amps = np.array(z_amps)
     i_idx = np.array(i_idx)
+    spins = np.array(spins)
+    times_nuc = np.array(times_nuc)
+    amps_nuc = np.array(amps_nuc)
+    spins_nuc = np.array(spins_nuc)
+
+    filter = amps < pam_lim
+    times = times[filter]
+    amps = amps[filter]
+    z_amps = z_amps[filter]
+    i_idx = i_idx[filter]
+    spins = spins[filter]
+
+    filter_nuc = amps_nuc < pam_lim
+    times_nuc = times_nuc[filter_nuc]
+    amps_nuc = amps_nuc[filter_nuc]
+    spins_nuc = spins_nuc[filter_nuc]
+
 
     order = np.argsort(z_amps)
-
-    plt.scatter(times[order], amps[order], label='Other beads', zorder=0, c=z_amps[order], cmap='viridis', s=10) # plot( 'o', color='blue',  alpha=0.05,
-    
     print(len(times_nuc), len(amps_nuc))
+
+    plt.scatter(times[order], amps[order], label='Other beads', zorder=0, c=z_amps[order], cmap='viridis', s=10) # plot( 'o', color='blue',  alpha=0.05,    
     plt.plot(times_nuc, amps_nuc, '+', color='red', label=f'Nuc bead', zorder=20) # {self.it}')
+   
+    # plt.scatter(times[order], spins[order], label='Other events', zorder=0, c=z_amps[order], cmap='viridis', s=10) # plot( 'o', color='blue',  alpha=0.05,    
+    # plt.plot(times_nuc, spins_nuc, '+', color='red', label=f'Nuc event', zorder=20, markersize = 5) # {self.it}')
+   
     # annotate with bead number
     # plt.plot(times_nuc, amps_nuc, '+', color='red', label=f'Nuc bead', zorder=10) # {self.it}')
     # if len(times_nuc) > 0:
@@ -605,14 +646,19 @@ def assemble_plot(res):
     #         plt.annotate(f"{it} {i_id}", (time, amp), color='black', fontsize=10, zorder=10)
 
 
-    plt.ylabel('Max amplitude of rolling average of PAM between two zeros (rad/tau)')
-    plt.xlabel('# of frames between two zeros of rolling average of PAM')
+    # plt.xlim([0, 1500])
+    # plt.ylim([-0.05, 2.00])
+    # plt.xlabel('# of frames between two zeros of rolling average of PAM')
+
+    # plt.ylabel('Max amplitude of angular momentum around z axis (rad/tau)')
+    cb = plt.colorbar()
+    plt.ylabel('Max amplitude of rolling average of PAM between two zeros (rad/tau)')    
+    plt.ylabel('Max amplitude of angular momentum differences with neighbors around z axis (rad/tau)')
+    cb.ax.set_ylabel("Max PAM")#Max z pos (bead diameter)")
+
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     plt.legend(by_label.values(), by_label.keys())
-    plt.colorbar()
-    plt.xlim([0, 1500])
-    plt.ylim([-0.05, 2.00])
     plt.title(f'107 beads, {v} rpm, 100 its, 1000 fps')
 
     print("Pickling figure")
@@ -669,7 +715,7 @@ if __name__ == "__main__":
 
     with mp.get_context('spawn').Pool() as p:
         res = []
-        for it in range(100):#3):
+        for it in range(10):#3):
             for v in [205]: #, 240]:#[205, 240]:
                 res.append(p.apply_async(job_plot_time_amplitude, args=(base_folder, 107, v, it)))
         res = [r.get() for r in res]
@@ -678,7 +724,7 @@ if __name__ == "__main__":
 
     # with mp.get_context('spawn').Pool() as p:
     #     res = []
-    #     for it in range(100):#3):
+    #     for it in [60, 85]:#range(100):#3):
     #         for v in [205]: #, 240]:#[205, 240]:
     #             res.append(p.apply_async(job, args=(base_folder, 107, v, it)))
     #     [r.get() for r in res]

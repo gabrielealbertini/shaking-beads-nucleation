@@ -153,7 +153,7 @@ def compute_transfer_angular_momentuum_numba(beads : np.ndarray,
                                       thres_dist)
     
     momentuum_perpendicular = np.zeros(len(neighbours_list))
-    momentuum_parallel = np.zeros(len(neighbours_list))
+    momumetuum_z = np.zeros(len(neighbours_list))
 
     for i, bead_id in enumerate(neighbours_list):
         # bead = beads[bead_id]
@@ -177,12 +177,12 @@ def compute_transfer_angular_momentuum_numba(beads : np.ndarray,
         mom_perp = np.dot(beads[3, bead_id, :] - beads[3, my_bead_id, :],
                           np.array(perpendicular))
 
-        mom_parallel = beads[3, bead_id, 2] - beads[3, my_bead_id, 2]
+        mom_z = beads[3, bead_id, 2] - beads[3, my_bead_id, 2]
 
         momentuum_perpendicular[i] = mom_perp
-        momentuum_parallel[i] = mom_parallel
+        momumetuum_z[i] = mom_z
 
-    return momentuum_perpendicular, momentuum_parallel
+    return momentuum_perpendicular, momumetuum_z
 
 def plot_transfer_angular_momentum(beads: List[Bead], r: float, ref_bead: int=0, folder: str="", prefix: str="") -> None:
     """
