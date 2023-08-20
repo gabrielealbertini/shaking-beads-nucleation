@@ -18,6 +18,10 @@ import glob
 import numba
 from scipy.signal import savgol_filter
 
+import matplotlib as mpl
+
+mpl.use('QtAgg')
+
 # fast math does not increase performance
 @numba.njit(fastmath=True, parallel=False)
 def _compute_ang_momentum(data_beads, n, first_frame_nuc, cr):
@@ -258,7 +262,8 @@ class Simulation:
         print(len(self.data_beads))
         # exit()
         
-        file = f"/n/holyscratch01/shared/fpollet/mechanism/PAM/{self.n}_{self.v}_{self.it}_agm-{cr}.npz"
+        file = f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/PAM/{self.n}_{self.v}_{self.it}_agm-{cr}.npz"
+        os.makedirs(os.path.dirname(file), exist_ok=True)
         if os.path.isfile(file):
             data = np.load(file)
             frames = data['frames']
@@ -285,7 +290,7 @@ class Simulation:
 
         # frames, agm, zpos = compute_ang_momentum(self.data_beads, self.n, first_frame_nuc, cr)
 
-        plt.figure()
+        # plt.figure()
         fig, axs = plt.subplots(4, 1, figsize=(45, 45), sharex=True)
         slice_fr = slice(0, len(frames))
         #slice_fr = slice(25000, 26500)
@@ -316,7 +321,7 @@ class Simulation:
 
 
         # slice_fr = slice(0, 100)
-        preferred_bead = 59#40#103#first_bead_nuc#57#104
+        preferred_bead = first_bead_nuc #59#40#103#first_bead_nuc#57#104
         for j in range(self.n):
             args = {"color": "gray", "zorder": 0}
             if j == first_bead_nuc:
@@ -332,7 +337,7 @@ class Simulation:
                 # axs[3].plot(frames[slice_fr][rolling_avg_nb-1:], rolling_std[:, j], **args)
                 # axs[2].plot(frames[slice_fr][rolling_avg_nb//2-1:-rolling_avg_nb//2], rolling_avg[:, j], **args)
                 # axs[3].plot(frames[slice_fr][rolling_avg_nb//2-1:-rolling_avg_nb//2], rolling_std[:, j], **args)
-                axs[2].plot(frames[slice_fr], savgol_signal[:, j], **args)
+                axs[2].plot(frames[slice_fr], savgol_signal[slice_fr, j], **args)
                 axs[3].plot(frames[slice_fr], spin_z[frames[slice_fr], j], **args)
                 # axs[4].plot(frames[slice_fr], ke_trans[frames[slice_fr], j], **args)
                 # axs[5].plot(frames[slice_fr], ke_rot[frames[slice_fr], j], **args)
@@ -363,13 +368,38 @@ class Simulation:
 
         # pikcle figure
 
-        plt.savefig(f"/n/holyscratch01/shared/fpollet/mechanism/Output/{self.n}_{self.v}_{self.it}_{preferred_bead}_angular_momentum_evolution_full.png")
+        os.makedirs('/n/holyscratch01/shared/adjellouli/tmp/mechanism/Output', exist_ok=True)
+        plt.savefig(f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/Output/{self.n}_{self.v}_{self.it}_{preferred_bead}_angular_momentum_evolution_full.png")
 
-        
-        with open(f"/n/holyscratch01/shared/fpollet/mechanism/Output/{self.n}_{self.v}_{self.it}_{preferred_bead}_angular_momentum_evolution.pkl", "wb") as f:
+        # plt.show()
+        with open(f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/Output/{self.n}_{self.v}_{self.it}_{preferred_bead}_angular_momentum_evolution.pkl", "wb") as f:
             pickle.dump(plt.gcf(), f)
             
         plt.close()
+
+        fps = 1000
+        fig, axs = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
+        j = preferred_bead
+        slice_fr = slice(first_frame_nuc - 1000, first_frame_nuc + 1000)
+        args = {"color": "blue", "zorder": 0}
+        axs[0].plot(frames[slice_fr]/fps, zpos[slice_fr, j], **args)
+        axs[1].plot(frames[slice_fr]/fps, savgol_signal[slice_fr, j], **args)
+        # axs[0].set_xlabel("Time (s)")
+        axs[0].set_ylabel("Z position (particle diameter)")
+        axs[1].set_xlabel("Time (s)")
+        axs[1].set_ylabel("Projected angular momentum (rad/tau)")
+        axs[0].axvline(first_frame_nuc/fps, color="black", linestyle="--", label='nucleation')
+        axs[1].axvline(first_frame_nuc/fps, color="black", linestyle="--", label='nucleation')
+        axs[0].legend()
+        axs[1].legend()
+        plt.suptitle(f"{self.n}_{self.v}_{self.it}_{preferred_bead} 1000 fps simulation, contact radius = {cr}")
+        plt.tight_layout()
+
+        plt.savefig(f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/Output/{self.n}_{self.v}_{self.it}_{preferred_bead}_angular_momentum_evolution_zoom.png")
+
+
+
+        # plt.show()
 
         # plot z position of nucleating bead too
 
@@ -811,9 +841,9 @@ if __name__ == "__main__":
 
 
     # test_zeros()
-
-    # job(base_folder, 107, 205, 0)
-    # exit()
+    for i in range(100):
+        job(base_folder, 107, 240, i)
+    exit()
 
     # job(base_folder, 107, 205, 1)
     # job(base_folder, 107, 205, 3)
@@ -842,13 +872,13 @@ if __name__ == "__main__":
     #             res.append(p.apply_async(job, args=(base_folder2, 107, v, it)))
     #     [r.get() for r in res]
     
-    with mp.get_context('spawn').Pool() as p:
-        res = []
-        for it in range(100):#3):
-            for v in [240]: #, 240]:#[205, 240]:
-                res.append(p.apply_async(job_plot_time_amplitude, args=(base_folder2, 107, v, it)))
-        res = [r.get() for r in res]
-        assemble_plot(res, 240)
+    # with mp.get_context('spawn').Pool() as p:
+    #     res = []
+    #     for it in range(100):#3):
+    #         for v in [240]: #, 240]:#[205, 240]:
+    #             res.append(p.apply_async(job_plot_time_amplitude, args=(base_folder2, 107, v, it)))
+    #     res = [r.get() for r in res]
+    #     assemble_plot(res, 240)
 
     # with mp.get_context('spawn').Pool() as p:
         # res = []
