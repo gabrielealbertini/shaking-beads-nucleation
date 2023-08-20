@@ -682,12 +682,26 @@ def assemble_plot(res, v):
     print(len(times_nuc), len(amps_nuc))
 
     colors = np.array(["green"]*len(z_amps))
-    colors[z_amps[order] > 0.93] = "blue"
-    plt.scatter(times[order][z_amps[order] <= 0.93] , amps[order][z_amps[order] <= 0.93], label='Other events', zorder=0, c="green") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,    
-    plt.scatter(times[order][z_amps[order] > 0.93], amps[order][z_amps[order] > 0.93], label='Attempted nucleation events', zorder=0, c="blue") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,    
+    limit = 0.93
+    colors[z_amps[order] > limit] = "blue"
+    plt.scatter(times[order][z_amps[order] <= limit] , amps[order][z_amps[order] <= limit], label='Other events', zorder=0, c="green") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,    
+    plt.scatter(times[order][z_amps[order] > limit], amps[order][z_amps[order] > limit], label='Attempted nucleation events', zorder=0, c="blue") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,    
+
+
+    data_saved = {
+        "Other events": (times[order][z_amps[order] <= limit].tolist(), amps[order][z_amps[order] <= limit].tolist()),
+        "Attempted nucleation events": (times[order][z_amps[order] > limit].tolist(), amps[order][z_amps[order] > limit].tolist()),
+        "Nucleation events": (times_nuc.tolist(), amps_nuc.tolist())
+    }
+    import json
+    with open('data.json', 'w') as fp:
+        json.dump(data_saved, fp)
 
     # plt.scatter(times[order], amps[order], label='Other beads', zorder=0, c=list(colors)) #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,    
-    plt.plot(times_nuc, amps_nuc, '+', color='red', label=f'Nucleation events', zorder=20) # {self.it}')
+    
+    # uncomment to show nuc events
+    # plt.plot(times_nuc, amps_nuc, '+', color='red', label=f'Nucleation events', zorder=20) # {self.it}')
+    plt.scatter(times_nuc, amps_nuc, zorder=0, c="blue")
    
     # plt.scatter(times[order], spins[order], label='Other events', zorder=0, c=z_amps[order], cmap='viridis', s=10) # plot( 'o', color='blue',  alpha=0.05,    
     # plt.plot(times_nuc, spins_nuc, '+', color='red', label=f'Nuc event', zorder=20, markersize = 5) # {self.it}')
@@ -837,15 +851,17 @@ if __name__ == "__main__":
         assemble_plot(res, 240)
 
     # with mp.get_context('spawn').Pool() as p:
-        res = []
-        for it in range(100):#3):
-            for v in [205]: #, 240]:#[205, 240]:
-                res.append(p.apply_async(job_plot_time_amplitude, args=(base_folder, 107, v, it)))
-        res = [r.get() for r in res]
-        assemble_plot(res, 205)
+        # res = []
+        # for it in range(100):#3):
+        #     for v in [205]: #, 240]:#[205, 240]:
+        #         res.append(p.apply_async(job_plot_time_amplitude, args=(base_folder, 107, v, it)))
+        # res = [r.get() for r in res]
+        # assemble_plot(res, 205)
 
 
            
 
     # to start interactive session on the cluster
     # salloc -p test -t 0-08:00 --mem 32000 -c 4
+
+# rsync -ah --progress  ALL/ /n/holylabs/LABS/bertoldi_lab/Lab/projects/shaking_beads_data/nucleation_mechanism/
