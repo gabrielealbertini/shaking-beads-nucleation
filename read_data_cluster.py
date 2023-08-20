@@ -211,7 +211,7 @@ class Simulation:
         """
         # find frame where there is nucleation
         # threshold is quite low to make sure to get the moment when the bead is not fully up
-        idx = np.where(self.data_beads[:, 1, :, 2] > (0.5 + np.sin(np.pi/3)))#/2))
+        idx = np.where(self.data_beads[:, 1, :, 2] > (0.5 + np.sin(np.pi/3)/2))#/2))
         print(idx)
         first_frame_nuc = idx[0][0]
         first_bead_nuc = idx[1][0]
@@ -254,7 +254,7 @@ class Simulation:
         """
         cr = 2.05
         rolling_avg_nb = 50
-        idx = np.where(self.data_beads[:, 1, :, 2] > (0.5 + np.sin(np.pi/3)))#/2))
+        idx = np.where(self.data_beads[:, 1, :, 2] > 1)#(0.5 + np.sin(np.pi/3)/2))#/2))
         print(idx)
         first_frame_nuc = idx[0][0]
         first_bead_nuc = idx[1][0]
@@ -274,8 +274,10 @@ class Simulation:
         else:
             time_start = time.perf_counter()
             frames, agm, neighboring_spin, zpos = _compute_ang_momentum(self.data_beads, self.n, first_frame_nuc, cr)
+
             time_end = time.perf_counter()
             np.savez(file, frames=frames, agm=agm, am_screw=neighboring_spin, zpos=zpos)
+            frames = np.array(frames)
             print("Saved agm data")
             print(f"Time elapsed: {time_end - time_start:0.4f} seconds")
 
@@ -380,14 +382,14 @@ class Simulation:
         fps = 1000
         fig, axs = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
         j = preferred_bead
-        slice_fr = slice(first_frame_nuc - 1000, first_frame_nuc + 1000)
+        slice_fr = slice(first_frame_nuc - 1500, first_frame_nuc + 100)
         args = {"color": "blue", "zorder": 0}
         axs[0].plot(frames[slice_fr]/fps, zpos[slice_fr, j], **args)
         axs[1].plot(frames[slice_fr]/fps, savgol_signal[slice_fr, j], **args)
         # axs[0].set_xlabel("Time (s)")
         axs[0].set_ylabel("Z position (particle diameter)")
         axs[1].set_xlabel("Time (s)")
-        axs[1].set_ylabel("Projected angular momentum (rad/tau)")
+        axs[1].set_ylabel("Savgol filtering of the projected angular momentum (rad/tau)")
         axs[0].axvline(first_frame_nuc/fps, color="black", linestyle="--", label='nucleation')
         axs[1].axvline(first_frame_nuc/fps, color="black", linestyle="--", label='nucleation')
         axs[0].legend()
