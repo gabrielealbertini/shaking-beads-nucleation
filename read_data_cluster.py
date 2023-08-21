@@ -122,7 +122,7 @@ class Simulation:
 
     def get_local_data_path(self) -> str:
         # Path of the data on the local machine
-        return f"/n/holyscratch01/shared/fpollet/mechanism/ALL/data_beads_{self.n}_{self.v}_{self.it}.npz"
+        return f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/ALL/data_beads_{self.n}_{self.v}_{self.it}.npz"
     
     def read_data_cluster(self) -> None:
         """
@@ -415,7 +415,7 @@ class Simulation:
         frames_nuc = idx[0]
         beads_nuc = idx[1]
 
-        file = f"/n/holyscratch01/shared/fpollet/mechanism/PAM/{self.n}_{self.v}_{self.it}_agm-{cr}.npz"
+        file = f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/PAM/{self.n}_{self.v}_{self.it}_agm-{cr}.npz"
         if os.path.isfile(file):
             data = np.load(file)
             frames = data['frames']
@@ -716,9 +716,10 @@ def assemble_plot(res, v):
     colors = np.array(["green"]*len(z_amps))
     limit = 0.93
     colors[z_amps[order] > limit] = "blue"
-    plt.scatter(times[order][z_amps[order] <= limit] , amps[order][z_amps[order] <= limit], label='Other events', zorder=0, c="green") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,    
-    plt.scatter(times[order][z_amps[order] > limit], amps[order][z_amps[order] > limit], label='Attempted nucleation events', zorder=0, c="blue") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,    
-
+    plt.scatter(times[order][z_amps[order] <= limit] , amps[order][z_amps[order] <= limit], label='Other events', zorder=0, c="green") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
+    plt.scatter(times[order][z_amps[order] > limit], amps[order][z_amps[order] > limit], label='Attempted nucleation events', zorder=0, c="blue") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
+    #
+    plt.scatter(times_nuc, amps_nuc, zorder=0, c="blue")
 
     data_saved = {
         "Other events": (times[order][z_amps[order] <= limit].tolist(), amps[order][z_amps[order] <= limit].tolist()),
@@ -726,14 +727,14 @@ def assemble_plot(res, v):
         "Nucleation events": (times_nuc.tolist(), amps_nuc.tolist())
     }
     import json
-    with open('data.json', 'w') as fp:
+    with open('data_pam.json', 'w') as fp:
         json.dump(data_saved, fp)
 
-    # plt.scatter(times[order], amps[order], label='Other beads', zorder=0, c=list(colors)) #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,    
-    
+    # plt.scatter(times[order], amps[order], label='Other beads', zorder=0, c=list(colors)) #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
+    # plt.scatter(times[order], amps[order], label='Other beads', zorder=0, c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
+
     # uncomment to show nuc events
     # plt.plot(times_nuc, amps_nuc, '+', color='red', label=f'Nucleation events', zorder=20) # {self.it}')
-    plt.scatter(times_nuc, amps_nuc, zorder=0, c="blue")
    
     # plt.scatter(times[order], spins[order], label='Other events', zorder=0, c=z_amps[order], cmap='viridis', s=10) # plot( 'o', color='blue',  alpha=0.05,    
     # plt.plot(times_nuc, spins_nuc, '+', color='red', label=f'Nuc event', zorder=20, markersize = 5) # {self.it}')
@@ -762,11 +763,12 @@ def assemble_plot(res, v):
     plt.xlabel('# of frames between two zeros of rolling average of PAM')
 
     # plt.ylabel('Max amplitude of angular momentum around z axis (rad/tau)')
-    cb = plt.colorbar()
     plt.ylabel('Max amplitude of savgol filtering of PAM between two zeros (rad/tau)')    
     # plt.ylabel('Max amplitude of angular momentum differences with neighbors around z axis (rad/tau)')
+
+    # cb = plt.colorbar()
     # cb.ax.set_ylabel("Max PAM")#Max z pos (bead diameter)")
-    cb.ax.set_ylabel("Max z pos (bead diameter)")
+    # cb.ax.set_ylabel("Max z pos (bead diameter)")
 
 
     handles, labels = plt.gca().get_legend_handles_labels()
@@ -776,11 +778,12 @@ def assemble_plot(res, v):
 
     print("Pickling figure")
     import pickle
-    with open('fig.pickle', 'wb') as f: # should be 'wb' rather than 'w'
-        pickle.dump(plt.gcf(), f) 
 
     print("Saving figure")
-    plt.savefig(f'output/amp_time_{v}.png')
+    plt.savefig(f'/n/holyscratch01/shared/adjellouli/tmp/mechanism/ALL/amp_time_{v}.png')
+    with open('fig.pickle', 'wb') as f: # should be 'wb' rather than 'w'
+        pickle.dump(plt.gcf(), f)
+    plt.show()
     # only the first nuc bead
     plt.close()
 
@@ -843,9 +846,11 @@ if __name__ == "__main__":
 
 
     # test_zeros()
+    # PLOT INDIVIDUAL SIMULATIONS
+    # TO GENERATE FIRST
     for i in range(100):
         job(base_folder, 107, 240, i)
-    exit()
+    # exit()
 
     # job(base_folder, 107, 205, 1)
     # job(base_folder, 107, 205, 3)
@@ -874,13 +879,14 @@ if __name__ == "__main__":
     #             res.append(p.apply_async(job, args=(base_folder2, 107, v, it)))
     #     [r.get() for r in res]
     
-    # with mp.get_context('spawn').Pool() as p:
-    #     res = []
-    #     for it in range(100):#3):
-    #         for v in [240]: #, 240]:#[205, 240]:
-    #             res.append(p.apply_async(job_plot_time_amplitude, args=(base_folder2, 107, v, it)))
-    #     res = [r.get() for r in res]
-    #     assemble_plot(res, 240)
+    with mp.get_context('spawn').Pool(1) as p:
+        res = []
+        for it in range(100):#3):
+            for v in [240]: #, 240]:#[205, 240]:
+                res.append(p.apply_async(job_plot_time_amplitude, args=(base_folder2, 107, v, it)))
+        res = [r.get() for r in res]
+        assemble_plot(res, 240)
+    exit()
 
     # with mp.get_context('spawn').Pool() as p:
         # res = []
