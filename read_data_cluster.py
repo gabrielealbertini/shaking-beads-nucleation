@@ -760,7 +760,7 @@ def assemble_plot(res, v):
 
     plt.xlim([0, 250])
     plt.ylim([0, 5.00])
-    plt.xlabel('# of frames between two zeros of rolling average of PAM')
+    plt.xlabel('# of frames between two zeros of savgol filtering of PAM')
 
     # plt.ylabel('Max amplitude of angular momentum around z axis (rad/tau)')
     plt.ylabel('Max amplitude of savgol filtering of PAM between two zeros (rad/tau)')    
