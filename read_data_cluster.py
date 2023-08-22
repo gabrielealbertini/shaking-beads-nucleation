@@ -22,6 +22,8 @@ import matplotlib as mpl
 
 mpl.use('QtAgg')
 
+base_path = r"/n/holylabs/LABS/bertoldi_lab/Lab/projects/"
+
 # fast math does not increase performance
 @numba.njit(fastmath=True, parallel=False)
 def _compute_ang_momentum(data_beads, n, first_frame_nuc, cr):
@@ -122,7 +124,7 @@ class Simulation:
 
     def get_local_data_path(self) -> str:
         # Path of the data on the local machine
-        return f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/ALL/data_beads_{self.n}_{self.v}_{self.it}.npz"
+        return base_path + f"/mechanism/ALL/data_beads_{self.n}_{self.v}_{self.it}.npz"
     
     def read_data_cluster(self) -> None:
         """
@@ -262,7 +264,7 @@ class Simulation:
         print(len(self.data_beads))
         # exit()
         
-        file = f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/PAM/{self.n}_{self.v}_{self.it}_agm-{cr}.npz"
+        file = base_path + f"/mechanism/PAM/{self.n}_{self.v}_{self.it}_agm-{cr}.npz"
         os.makedirs(os.path.dirname(file), exist_ok=True)
         if os.path.isfile(file):
             data = np.load(file)
@@ -370,11 +372,11 @@ class Simulation:
 
         # pikcle figure
 
-        os.makedirs('/n/holyscratch01/shared/adjellouli/tmp/mechanism/Output', exist_ok=True)
-        plt.savefig(f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/Output/{self.n}_{self.v}_{self.it}_{preferred_bead}_angular_momentum_evolution_full.png")
+        os.makedirs(base_path + '/mechanism/Output', exist_ok=True)
+        plt.savefig(base_path + f"/mechanism/Output/{self.n}_{self.v}_{self.it}_{preferred_bead}_angular_momentum_evolution_full.png")
 
         # plt.show()
-        with open(f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/Output/{self.n}_{self.v}_{self.it}_{preferred_bead}_angular_momentum_evolution.pkl", "wb") as f:
+        with open(base_path + f"/mechanism/Output/{self.n}_{self.v}_{self.it}_{preferred_bead}_angular_momentum_evolution.pkl", "wb") as f:
             pickle.dump(plt.gcf(), f)
             
         plt.close()
@@ -397,7 +399,7 @@ class Simulation:
         plt.suptitle(f"{self.n}_{self.v}_{self.it}_{preferred_bead} 1000 fps simulation, contact radius = {cr}")
         plt.tight_layout()
 
-        plt.savefig(f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/Output/{self.n}_{self.v}_{self.it}_{preferred_bead}_angular_momentum_evolution_zoom.png")
+        plt.savefig(base_path + f"/mechanism/Output/{self.n}_{self.v}_{self.it}_{preferred_bead}_angular_momentum_evolution_zoom.png")
 
 
 
@@ -415,7 +417,7 @@ class Simulation:
         frames_nuc = idx[0]
         beads_nuc = idx[1]
 
-        file = f"/n/holyscratch01/shared/adjellouli/tmp/mechanism/PAM/{self.n}_{self.v}_{self.it}_agm-{cr}.npz"
+        file = base_path + f"/mechanism/PAM/{self.n}_{self.v}_{self.it}_agm-{cr}.npz"
         if os.path.isfile(file):
             data = np.load(file)
             frames = data['frames']
@@ -780,9 +782,9 @@ def assemble_plot(res, v):
     import pickle
 
     print("Saving figure")
-    plt.savefig(f'/n/holyscratch01/shared/adjellouli/tmp/mechanism/ALL/amp_time_{v}.png')
-    with open('fig.pickle', 'wb') as f: # should be 'wb' rather than 'w'
-        pickle.dump(plt.gcf(), f)
+    plt.savefig(base_path + f'/mechanism/ALL/amp_time_{v}.png')
+    # with open('fig.pickle', 'wb') as f: # should be 'wb' rather than 'w'
+    #     pickle.dump(plt.gcf(), f)
     plt.show()
     # only the first nuc bead
     plt.close()
