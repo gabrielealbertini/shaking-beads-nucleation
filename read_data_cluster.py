@@ -410,7 +410,7 @@ class Simulation:
     def plot_time_amplitude(self):
         cr = 2.05
         threshold = (0.5 + np.sin(np.pi/3))
-        low_threshold = 0.6
+        low_threshold = 0.6#0.6
         print(threshold)
         idx = np.where(self.data_beads[:, 1, :, 2] > threshold)#/2))
         # print(idx)
@@ -480,8 +480,8 @@ class Simulation:
 
             # Calculate the maximum value within each interval
             max_values = np.maximum.reduceat(arr, starting_indices) 
-            if i == 59:
-                print(arr[17320:17335])
+            # if i == 59:
+            #     print(arr[17320:17335])
             max_values_z = np.maximum.reduceat(zpos_short, starting_indices)
             max_values_spin = np.maximum.reduceat(spin_z_short, starting_indices)
 
@@ -513,6 +513,7 @@ class Simulation:
             event_nucleation_mask = np.zeros(index_diff.shape, dtype=bool)
 
             events_selected_mask = ((zpos_startings[:-1] == False) & (zero_indices[:-1] < (frames_nuc[0] - margin))  & (zero_indices[:-1] > frame_acc)) | event_nucleation_mask # keep only the ones below threshold at the beginning of the interval
+            # events_selected_mask = ((zero_indices[:-1] < (frames_nuc[0] - margin))  & (zero_indices[:-1] > frame_acc)) | event_nucleation_mask # keep only the ones below threshold at the beginning of the interval
 
             if i == beads_nuc[0]:
                 print(zero_indices.shape)
@@ -529,6 +530,7 @@ class Simulation:
                 time_max_nuc = index_diff[event_nucleation_mask][idx_max_nuc]
                 amp_max_nuc = max_values[event_nucleation_mask][idx_max_nuc]
                 spin_max_nuc = max_values_spin[event_nucleation_mask][idx_max_nuc]
+                z_amp_max_nuc = max_values_z[event_nucleation_mask][idx_max_nuc]
 
 
                 times_nuc.append(time_max_nuc)
@@ -537,6 +539,14 @@ class Simulation:
 
                 print(zero_indices[:-1][event_nucleation_mask][idx_max_nuc])
                 print(time_max_nuc, amp_max_nuc, spin_max_nuc)
+
+                times.append(time_max_nuc)
+                amps.append(amp_max_nuc)
+                z_amps.append(z_amp_max_nuc)
+                spins.append(spin_max_nuc)
+                # spins.extend(spin_z_short[zero_indices][z_chg_all])
+                i_idx.append(i)
+                i_frames_idx.append(frame_nuc_0)
             
             # z_chg_all = zero_indices > z_chg
 
@@ -699,6 +709,7 @@ def assemble_plot(res, v):
     spins_nuc = np.array(spins_nuc)
 
     filter = (amps < pam_lim) & (amps > 0.01)
+    # filter = amps > -5
     times = times[filter]
     amps = amps[filter]
     z_amps = z_amps[filter]
@@ -718,10 +729,13 @@ def assemble_plot(res, v):
     colors = np.array(["green"]*len(z_amps))
     limit = 0.93
     colors[z_amps[order] > limit] = "blue"
-    plt.scatter(times[order][z_amps[order] <= limit] , amps[order][z_amps[order] <= limit], label='Other events', zorder=0, c="green") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
-    plt.scatter(times[order][z_amps[order] > limit], amps[order][z_amps[order] > limit], label='Attempted nucleation events', zorder=0, c="blue") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
+    cbsrc = plt.scatter(times[order][z_amps[order] <= limit] , amps[order][z_amps[order] <= limit], label='Other events', zorder=0, c=z_amps[order][z_amps[order] <= limit], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
+    plt.scatter(times[order][z_amps[order] > limit], amps[order][z_amps[order] > limit], label='Attempted nucleation events', zorder=0, c=z_amps[order][z_amps[order] > limit], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
     #
-    plt.scatter(times_nuc, amps_nuc, zorder=0, c="blue")
+    # plt.scatter(times[order][z_amps[order] <= limit] , amps[order][z_amps[order] <= limit], label='Other events', zorder=0, c="green") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
+    # plt.scatter(times[order][z_amps[order] > limit], amps[order][z_amps[order] > limit], label='Attempted nucleation events', zorder=0, c="blue") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
+    # #
+    # plt.scatter(times_nuc, amps_nuc, zorder=-5, c="red", label="Nucleation", marker='x')
 
     data_saved = {
         "Other events": (times[order][z_amps[order] <= limit].tolist(), amps[order][z_amps[order] <= limit].tolist()),
@@ -768,9 +782,9 @@ def assemble_plot(res, v):
     plt.ylabel('Max amplitude of savgol filtering of PAM between two zeros (rad/tau)')    
     # plt.ylabel('Max amplitude of angular momentum differences with neighbors around z axis (rad/tau)')
 
-    # cb = plt.colorbar()
+    cb = plt.colorbar(cbsrc)
     # cb.ax.set_ylabel("Max PAM")#Max z pos (bead diameter)")
-    # cb.ax.set_ylabel("Max z pos (bead diameter)")
+    cb.ax.set_ylabel("Max z pos (bead diameter)")
 
 
     handles, labels = plt.gca().get_legend_handles_labels()
@@ -846,12 +860,12 @@ if __name__ == "__main__":
     base_folder = "/n/holyscratch01/shared/adjellouli/simulations_reorganized/mechanisms/nucleation_mechanism_1000fps_extended/d_amp=1.600"
     base_folder2 = "/n/holyscratch01/shared/adjellouli/simulations_reorganized/mechanisms/nucleation_mechanism_1000fps_240rpm/d_amp=1.600"
 
-
+    # job(base_folder, 107, 205, 0)
     # test_zeros()
     # PLOT INDIVIDUAL SIMULATIONS
     # TO GENERATE FIRST
-    for i in range(100):
-        job(base_folder, 107, 240, i)
+    # for i in range(100):
+    #     job(base_folder, 107, 240, i)
     # exit()
 
     # job(base_folder, 107, 205, 1)
