@@ -735,15 +735,15 @@ def assemble_plot(res, v):
     # plt.scatter(times[order][z_amps[order] <= limit] , amps[order][z_amps[order] <= limit], label='Other events', zorder=0, c="green") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
     # plt.scatter(times[order][z_amps[order] > limit], amps[order][z_amps[order] > limit], label='Attempted nucleation events', zorder=0, c="blue") #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
     # #
-    # plt.scatter(times_nuc, amps_nuc, zorder=-5, c="red", label="Nucleation", marker='x')
+    plt.scatter(times_nuc, amps_nuc, zorder=-5, c="red", label="Nucleation", marker='x')
 
     data_saved = {
-        "Other events": (times[order][z_amps[order] <= limit].tolist(), amps[order][z_amps[order] <= limit].tolist()),
-        "Attempted nucleation events": (times[order][z_amps[order] > limit].tolist(), amps[order][z_amps[order] > limit].tolist()),
+        "Other events": (times[order][z_amps[order] <= limit].tolist(), amps[order][z_amps[order] <= limit].tolist(), z_amps[order][z_amps[order] <= limit].tolist()),
+        "Attempted nucleation events": (times[order][z_amps[order] > limit].tolist(), amps[order][z_amps[order] > limit].tolist(), z_amps[order][z_amps[order] > limit].tolist()),
         "Nucleation events": (times_nuc.tolist(), amps_nuc.tolist())
     }
     import json
-    with open('data_pam.json', 'w') as fp:
+    with open(base_path + 'mechanism/data_pam.json', 'w') as fp:
         json.dump(data_saved, fp)
 
     # plt.scatter(times[order], amps[order], label='Other beads', zorder=0, c=list(colors)) #c=z_amps[order], cmap='viridis', s=10, vmin=0.5, vmax=1.5) # plot( 'o', color='blue',  alpha=0.05,
