@@ -244,10 +244,16 @@ class Simulation:
             frames.append(image)
         imageio.mimsave(f'{folder}/{folder}.gif', # output gif
                 frames,          # array of input frames
-                fps = 1) 
-        
+                fps = 1)
 
+    def export_stats(self):
+        threshold = (0.5 + np.sin(np.pi / 3))
+        idx = np.where(self.data_beads[:, 1, :, 2] > threshold)  # /2))
+        # print(idx)
+        frames_nuc = idx[0]
+        beads_nuc = idx[1]
 
+        return (self.it, frames_nuc[0], beads_nuc[0])
 
     # @numba.jit(nopython=False)
     def plot_angular_momentum_over_time(self):
@@ -333,6 +339,7 @@ class Simulation:
             elif j in idx_2:
                 args = {"label": "Other bead of interest", "zorder": 10}
 
+            #if True:
             # if j == 69: # 89 interesting for it 1
             if j == preferred_bead:#86:#26:#104:  #first_bead_nuc:
                 axs[0].plot(frames[slice_fr], agm[slice_fr, j], **args)
@@ -407,7 +414,91 @@ class Simulation:
 
         # plot z position of nucleating bead too
 
-    def plot_time_amplitude(self):
+    def plot_jumps_z_and_pam(self):
+        """
+            Plot angular momentum over time for each bead
+        """
+
+        cr = 2.05
+        thr = 1.2
+        window_around = 200
+        max_events_to_show = 20000
+
+        idx = np.where(self.data_beads[:, 1, :, 2] > 1)  # (0.5 + np.sin(np.pi/3)/2))#/2))
+        first_frame_nuc = idx[0][0]
+        first_bead_nuc = idx[1][0]
+
+        print(len(self.data_beads))
+
+        file = base_path + f"/mechanism/PAM/{self.n}_{self.v}_{self.it}_agm-{cr}.npz"
+        os.makedirs(os.path.dirname(file), exist_ok=True)
+        if os.path.isfile(file):
+            data = np.load(file)
+            frames = data['frames']
+            agm = data['agm']
+            zpos = data['zpos']
+            # neighboring_spin = data['am_screw']
+            print("Loaded agm data")
+        else:
+            time_start = time.perf_counter()
+            frames, agm, neighboring_spin, zpos = _compute_ang_momentum(self.data_beads, self.n, first_frame_nuc, cr)
+
+            time_end = time.perf_counter()
+            np.savez(file, frames=frames, agm=agm, am_screw=neighboring_spin, zpos=zpos)
+            frames = np.array(frames)
+            print("Saved agm data")
+            print(f"Time elapsed: {time_end - time_start:0.4f} seconds")
+
+
+        # plt.figure()
+        fig, axs = plt.subplots(2, 1, figsize=(20, 15), sharex=True)
+        slice_fr = slice(0, len(frames))
+        savgol_signal = savgol_filter(agm[slice_fr], 21, 3, axis=0, mode='interp')
+
+        max_display = 0
+        for j in range(self.n):
+            args = {"color": "gray", "zorder": 0}
+
+            if j == first_bead_nuc:
+                args = {"label": "First nucleating bead", "zorder": 10}
+
+            z_crossings = np.where(((zpos[1:, j] > thr) & (zpos[:-1, j] < thr)))[0]
+
+            for z_cross_idx in z_crossings:
+                current_slice = slice(z_cross_idx - window_around, z_cross_idx + window_around//2)
+                if (zpos[slice(z_cross_idx - window_around, z_cross_idx - window_around//2), j] > 1).any():
+                    continue
+                max_display += 1
+                if max_display > max_events_to_show:
+                    break
+
+                print("Show", j, z_cross_idx)
+                x_label = list(range(len(frames[current_slice])))
+                axs[0].plot(x_label, savgol_signal[current_slice, j], **args)
+                axs[1].plot(x_label, zpos[current_slice, j], **args)
+
+        axs[0].set_xlabel("Frame number")
+        axs[0].set_ylabel("Savgol Projected angular momentum (rad/tau)")
+        axs[1].set_xlabel("Frame number")
+        axs[1].set_ylabel("Z position (particle diameter)")
+        axs[0].set_ylim(-4, 4)
+
+        plt.suptitle(f"{self.n}_{self.v}_{self.it} 1000 fps simulation, contact radius = {cr}")
+
+        plt.tight_layout()
+        os.makedirs(base_path + '/mechanism/Output', exist_ok=True)
+        plt.savefig(
+            base_path + f"/mechanism/Output/{self.n}_{self.v}_{self.it}_angular_momentum_evolution_full.png")
+
+        with open(
+                base_path + f"/mechanism/Output/{self.n}_{self.v}_{self.it}_angular_momentum_evolution.pkl",
+                "wb") as f:
+            pickle.dump(plt.gcf(), f)
+
+        plt.close()
+
+
+def plot_time_amplitude(self):
         cr = 2.05
         threshold = (0.5 + np.sin(np.pi/3))
         low_threshold = 0.6#0.6
@@ -602,14 +693,6 @@ class Simulation:
         # plt.savefig('output/amp_time.png')
         # plt.close()
 
-    def export_stats(self):
-        threshold = (0.5 + np.sin(np.pi/3))
-        idx = np.where(self.data_beads[:, 1, :, 2] > threshold)#/2))
-        # print(idx)
-        frames_nuc = idx[0]
-        beads_nuc = idx[1]
-
-        return (self.it, frames_nuc[0], beads_nuc[0])
     
 
 def job(base_folder, n, v, it):
@@ -626,7 +709,8 @@ def job(base_folder, n, v, it):
     sim.load_local_data()
     # sim.plot_transfer_momentuum()
     print("Computing angular momentum")
-    sim.plot_angular_momentum_over_time()
+    # sim.plot_angular_momentum_over_time()
+    sim.plot_jumps_z_and_pam()
 
 def job_plot_time_amplitude(base_folder, n, v, it):
     # plt.figure(figsize=(10,10))
@@ -862,6 +946,10 @@ if __name__ == "__main__":
 
     # job(base_folder, 107, 205, 0)
     # test_zeros()
+    job(base_folder, 107, 240, 0)
+    exit()
+
+
     # PLOT INDIVIDUAL SIMULATIONS
     # TO GENERATE FIRST
     # for i in range(100):
